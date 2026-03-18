@@ -5,9 +5,6 @@
   "windows": ["main", "recording_overlay"],
   "permissions": [
     "core:default",
-    "opener:default",
-    "store:default",
-    "process:default",
     "fs:read-files",
     "fs:allow-resource-read-recursive",
     {
