@@ -10,6 +10,7 @@
   },
   "sidebar": {
     "general": "General",
+    "meeting": "Meeting",
     "models": "Models",
     "advanced": "Advanced",
     "postProcessing": "Post Process",
@@ -582,5 +583,35 @@
   "overlay": {
     "transcribing": "Transcribing...",
     "processing": "Processing..."
+  },
+  "meeting": {
+    "title": "Meeting Mode",
+    "start": "Start Meeting",
+    "stop": "Stop Meeting",
+    "mic": "Microphone",
+    "systemAudio": "System Audio",
+    "recording": "Recording...",
+    "you": "You",
+    "them": "Other",
+    "tabs": {
+      "transcript": "Transcript",
+      "notes": "Notes"
+    },
+    "transcript": {
+      "waiting": "Waiting for speech...",
+      "empty": "No transcript available"
+    },
+    "notes": {
+      "title": "Meeting Notes",
+      "generate": "Generate Notes",
+      "regenerate": "Regenerate",
+      "generating": "Generating...",
+      "copy": "Copy",
+      "empty": "Generate notes after the meeting"
+    },
+    "history": {
+      "title": "Past Meetings",
+      "utterances": "utterances"
+    }
   }
 }

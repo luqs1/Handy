@@ -774,6 +774,70 @@ async isLaptop() : Promise<Result<boolean, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async startMeeting() : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("start_meeting") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async stopMeeting() : Promise<Result<MeetingSessionSummary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("stop_meeting") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async isMeetingActive() : Promise<boolean> {
+    try {
+    return await TAURI_INVOKE("is_meeting_active");
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return e as any;
+}
+},
+async getCurrentSessionId() : Promise<string | null> {
+    try {
+    return await TAURI_INVOKE("get_current_session_id");
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return e as any;
+}
+},
+async listMeetings() : Promise<Result<MeetingSessionSummary[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_meetings") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getMeetingTranscript(sessionId: string) : Promise<Result<Utterance[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_meeting_transcript", { sessionId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async generateMeetingNotes(sessionId: string, providerId: string, model: string, apiKey: string, systemPrompt: string, template: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("generate_meeting_notes", { sessionId, providerId, model, apiKey, systemPrompt, template }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelNotesGeneration() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("cancel_notes_generation") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -821,6 +885,10 @@ export type SoundTheme = "marimba" | "pop" | "custom"
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type WhisperAcceleratorSetting = "auto" | "cpu" | "gpu"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }
+export type Speaker = "you" | "them"
+export type Utterance = { id: string; speaker: Speaker; text: string; timestamp_ms: number; duration_ms: number }
+export type MeetingSessionSummary = { id: string; started_at: number; ended_at: number | null; duration_secs: number; utterance_count: number }
+export type MeetingSettings = { provider_id: string; model: string; api_key: string; system_prompt: string; template: string }
 
 /** tauri-specta globals **/
 

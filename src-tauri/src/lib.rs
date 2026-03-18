@@ -10,6 +10,7 @@ mod helpers;
 mod input;
 mod llm_client;
 mod managers;
+mod meeting_session;
 mod overlay;
 pub mod portable;
 mod settings;
@@ -419,6 +420,14 @@ pub fn run(cli_args: CliArgs) {
         commands::history::update_history_limit,
         commands::history::update_recording_retention_period,
         helpers::clamshell::is_laptop,
+        commands::meeting::start_meeting,
+        commands::meeting::stop_meeting,
+        commands::meeting::is_meeting_active,
+        commands::meeting::get_current_session_id,
+        commands::meeting::list_meetings,
+        commands::meeting::get_meeting_transcript,
+        commands::meeting::generate_meeting_notes,
+        commands::meeting::cancel_notes_generation,
     ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds
@@ -529,6 +538,19 @@ pub fn run(cli_args: CliArgs) {
             app.manage(TranscriptionCoordinator::new(app_handle.clone()));
 
             initialize_core_logic(&app_handle);
+
+            // Initialize the meeting session manager
+            let transcription_manager: Arc<TranscriptionManager> = app_handle
+                .state::<Arc<TranscriptionManager>>()
+                .inner()
+                .clone();
+            let model_manager: Arc<ModelManager> =
+                app_handle.state::<Arc<ModelManager>>().inner().clone();
+            let meeting_manager = Arc::new(
+                meeting_session::MeetingSessionManager::new(&app_handle, transcription_manager)
+                    .expect("Failed to initialize meeting session manager"),
+            );
+            app_handle.manage(meeting_manager);
 
             // Hide tray icon if --no-tray was passed
             if cli_args.no_tray {

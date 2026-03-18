@@ -13,6 +13,10 @@ import "./i18n";
 import { useModelStore } from "./stores/modelStore";
 useModelStore.getState().initialize();
 
+// Initialize meeting store (sets up event listeners for meeting mode)
+import { useMeetingsStore } from "./stores/meetingStore";
+useMeetingsStore.getState().initialize();
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />

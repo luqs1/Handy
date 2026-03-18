@@ -1,5 +1,5 @@
 use crate::settings::PostProcessProvider;
-use log::debug;
+use log::{debug, warn};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, REFERER, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -244,4 +244,137 @@ pub async fn fetch_models(
     }
 
     Ok(models)
+}
+
+use futures_util::StreamExt;
+
+fn build_notes_headers(provider: &PostProcessProvider, api_key: &str) -> Result<HeaderMap, String> {
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(USER_AGENT, HeaderValue::from_static("OpenOats/1.0"));
+
+    if !api_key.is_empty() {
+        if provider.id == "anthropic" {
+            headers.insert(
+                "x-api-key",
+                HeaderValue::from_str(api_key).map_err(|e| format!("Invalid API key: {}", e))?,
+            );
+            headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+        } else {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", api_key))
+                    .map_err(|e| format!("Invalid auth header: {}", e))?,
+            );
+        }
+    }
+
+    Ok(headers)
+}
+
+#[derive(Debug, Deserialize)]
+struct StreamingDelta {
+    content: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StreamingChunk {
+    choices: Vec<StreamingChoice>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StreamingChoice {
+    delta: StreamingDelta,
+}
+
+/// Stream chat completion chunks and invoke `on_chunk` for each token.
+/// Returns the full accumulated text on success.
+pub async fn stream_chat_completion(
+    provider: &PostProcessProvider,
+    api_key: String,
+    model: &str,
+    system_prompt: Option<String>,
+    user_content: String,
+    on_chunk: impl Fn(String) + Send + 'static,
+) -> Result<String, String> {
+    let base_url = provider.base_url.trim_end_matches('/');
+    let url = format!("{}/chat/completions", base_url);
+
+    let headers = build_notes_headers(provider, &api_key)?;
+    let client = reqwest::Client::builder()
+        .default_headers(headers)
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let mut messages: Vec<ChatMessage> = Vec::new();
+    if let Some(system) = system_prompt {
+        messages.push(ChatMessage {
+            role: "system".to_string(),
+            content: system,
+        });
+    }
+    messages.push(ChatMessage {
+        role: "user".to_string(),
+        content: user_content,
+    });
+
+    #[derive(Serialize)]
+    struct StreamRequest<'a> {
+        model: &'a str,
+        messages: &'a Vec<ChatMessage>,
+        stream: bool,
+    }
+
+    let request_body = StreamRequest {
+        model,
+        messages: &messages,
+        stream: true,
+    };
+
+    let response = client
+        .post(&url)
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP error: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("API error {}: {}", status, error_text));
+    }
+
+    let mut stream = response.bytes_stream();
+    let mut full_text = String::new();
+
+    while let Some(item) = stream.next().await {
+        match item {
+            Ok(bytes) => {
+                if let Ok(text) = String::from_utf8(bytes.to_vec()) {
+                    for line in text.lines() {
+                        if line.starts_with("data: ") {
+                            let data = &line[6..];
+                            if data.trim() == "[DONE]" {
+                                continue;
+                            }
+                            if let Ok(chunk) = serde_json::from_str::<StreamingChunk>(data) {
+                                if let Some(token) =
+                                    chunk.choices.first().and_then(|c| c.delta.content.clone())
+                                {
+                                    on_chunk(token.clone());
+                                    full_text.push_str(&token);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Stream error: {}", e);
+                break;
+            }
+        }
+    }
+
+    Ok(full_text)
 }
