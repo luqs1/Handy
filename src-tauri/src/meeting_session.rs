@@ -71,15 +71,15 @@ impl StreamingMicCapture {
         let config = device
             .supported_input_configs()
             .map_err(|e| anyhow::anyhow!("No input configs: {e}"))?
-            .find(|c| c.min_sample_rate().0 <= 48000 && c.max_sample_rate().0 >= 48000)
+            .find(|c| c.min_sample_rate().0 <= 16000 && c.max_sample_rate().0 >= 16000)
             .or_else(|| device.supported_input_configs().ok()?.into_iter().next())
             .ok_or_else(|| anyhow::anyhow!("No supported config"))?;
 
         let channels = config.channels();
-        let config = config.with_sample_rate(cpal::SampleRate(48000));
+        let config = config.with_sample_rate(cpal::SampleRate(16000));
 
         info!(
-            "Streaming mic: {} | rate: 48000 | channels: {}",
+            "Streaming mic: {} | rate: 16000 | channels: {}",
             name, channels
         );
 
