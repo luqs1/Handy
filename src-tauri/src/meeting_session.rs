@@ -128,6 +128,7 @@ pub struct MeetingSessionManager {
     system_buffer: Arc<Mutex<Vec<f32>>>,
     transcription_manager: Arc<crate::managers::transcription::TranscriptionManager>,
     session_start_ms: Arc<Mutex<Option<i64>>>,
+    start_mutex: Mutex<()>,
 }
 
 impl MeetingSessionManager {
@@ -147,6 +148,7 @@ impl MeetingSessionManager {
             system_buffer: Arc::new(Mutex::new(Vec::with_capacity(FLUSH_SAMPLES * 2))),
             transcription_manager,
             session_start_ms: Arc::new(Mutex::new(None)),
+            start_mutex: Mutex::new(()),
         })
     }
 
@@ -224,6 +226,14 @@ impl MeetingSessionManager {
     }
 
     pub fn start_meeting(&self) -> Result<String> {
+        let _guard = match self.start_mutex.lock() {
+            Ok(g) => g,
+            Err(e) => {
+                error!("[MEETING] Failed to acquire start mutex: {:?}", e);
+                return Err(anyhow::anyhow!("Failed to acquire start mutex"));
+            }
+        };
+
         if self.is_active.load(Ordering::SeqCst) {
             error!("[MEETING] start_meeting called but meeting already active");
             return Err(anyhow::anyhow!("A meeting is already active"));
