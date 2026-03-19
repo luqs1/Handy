@@ -479,8 +479,25 @@ impl TranscriptionManager {
         {
             // If the model is loading, wait for it to complete.
             let mut is_loading = self.is_loading.lock().unwrap();
-            while *is_loading {
-                is_loading = self.loading_condvar.wait(is_loading).unwrap();
+
+            // If not loaded and not loading, trigger loading
+            if *is_loading {
+                drop(is_loading);
+                let mut is_loading = self.is_loading.lock().unwrap();
+                while *is_loading {
+                    is_loading = self.loading_condvar.wait(is_loading).unwrap();
+                }
+            } else if self.lock_engine().is_none() {
+                // Model not loaded and not loading - trigger load
+                drop(is_loading);
+                info!("Model not loaded, initiating load for meeting transcription");
+                self.initiate_model_load();
+
+                // Wait for loading to complete
+                let mut is_loading = self.is_loading.lock().unwrap();
+                while *is_loading {
+                    is_loading = self.loading_condvar.wait(is_loading).unwrap();
+                }
             }
 
             let engine_guard = self.lock_engine();
