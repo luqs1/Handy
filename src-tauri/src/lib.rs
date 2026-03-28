@@ -6,11 +6,15 @@ pub mod audio_toolkit;
 pub mod cli;
 mod clipboard;
 mod commands;
+pub mod domain;
+pub mod engines;
+pub mod stores;
 mod helpers;
 mod input;
-mod llm_client;
+pub mod llm_client;
 mod managers;
 mod meeting_session;
+pub mod session_coordinator;
 mod overlay;
 pub mod portable;
 mod settings;
@@ -428,6 +432,18 @@ pub fn run(cli_args: CliArgs) {
         commands::meeting::get_meeting_transcript,
         commands::meeting::generate_meeting_notes,
         commands::meeting::cancel_notes_generation,
+        // New session coordinator commands (coexist with above)
+        commands::session::session_start,
+        commands::session::session_stop,
+        commands::session::session_discard,
+        commands::session::session_live_state,
+        commands::session::session_is_recording,
+        commands::session::session_list,
+        commands::session::session_transcript,
+        commands::session::session_delete,
+        commands::session::session_rename,
+        commands::session::session_templates,
+        commands::session::session_generate_notes,
     ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds
@@ -551,6 +567,16 @@ pub fn run(cli_args: CliArgs) {
                     .expect("Failed to initialize meeting session manager"),
             );
             app_handle.manage(meeting_manager);
+
+            // Initialize the new session coordinator (coexists with meeting_manager)
+            let session_root = crate::portable::app_data_dir(&app_handle)
+                .ok()
+                .map(|d| d.to_path_buf());
+            let coordinator: commands::session::CoordinatorState =
+                std::sync::Arc::new(tokio::sync::Mutex::new(
+                    session_coordinator::SessionCoordinator::new(session_root),
+                ));
+            app_handle.manage(coordinator);
 
             // Hide tray icon if --no-tray was passed
             if cli_args.no_tray {

@@ -40,3 +40,6 @@ blob-report/
 
 # Nix build output
 result
+
+# Test fixtures (models are too large for git)
+src-tauri/test-fixtures/
