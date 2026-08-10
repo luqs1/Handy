@@ -16,6 +16,7 @@ mod memory;
 mod overlay;
 mod paste_tx;
 pub mod portable;
+mod review;
 mod secure_input;
 mod settings;
 mod shortcut;
@@ -335,6 +336,9 @@ fn initialize_core_logic(app_handle: &AppHandle) {
 
     // Create the recording overlay window (hidden by default)
     utils::create_recording_overlay(app_handle);
+
+    // Create the review-before-paste panel (hidden by default, macOS only)
+    review::create_review_panel(app_handle);
 }
 
 #[tauri::command]
@@ -644,6 +648,9 @@ pub fn run(cli_args: CliArgs) {
             shortcut::resume_all_bindings,
             shortcut::change_mute_while_recording_setting,
             shortcut::change_append_trailing_space_setting,
+            shortcut::change_review_before_paste_setting,
+            review::review_submit,
+            review::review_cancel,
             shortcut::change_lazy_stream_close_setting,
             shortcut::change_vad_enabled_setting,
             shortcut::change_filler_word_removal_enabled_setting,

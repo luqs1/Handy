@@ -526,6 +526,10 @@
         "label": "Append Trailing Space",
         "description": "Add a space after pasted transcription"
       },
+      "reviewBeforePaste": {
+        "label": "Review Before Paste",
+        "description": "Show an editable panel before pasting. Enter or a bare Option tap pastes, Escape dismisses. Edits are kept in history. macOS only."
+      },
       "keyboardImplementation": {
         "title": "Keyboard Implementation",
         "description": "Choose the keyboard shortcut backend.",
@@ -683,5 +687,15 @@
     "learnMore": "How to fix",
     "recorderBlocked": "Can't record shortcuts right now — macOS Secure Input is blocking key events. Resolve the Secure Input warning first.",
     "dismiss": "Dismiss"
+  },
+  "review": {
+    "title": "Review transcription",
+    "edited": "edited",
+    "keyEnter": "⏎",
+    "keyOption": "⌥",
+    "keyEscape": "esc",
+    "hintPaste": "paste",
+    "hintAsIs": "paste as-is",
+    "hintDismiss": "dismiss"
   }
 }

@@ -475,6 +475,11 @@ pub struct AppSettings {
     /// `overlay_position` (position `none` → style `None`).
     #[serde(default = "default_overlay_style")]
     pub overlay_style: OverlayStyle,
+    /// Show an editable review panel before pasting the transcription. Enter or
+    /// a bare Option/Alt tap pastes; Escape cancels. Edits are stored on the
+    /// history entry for later fine-tuning export. macOS only.
+    #[serde(default)]
+    pub review_before_paste: bool,
 }
 
 fn default_model() -> String {
@@ -912,6 +917,7 @@ pub fn get_default_settings() -> AppSettings {
         extra_recording_buffer_ms: 0,
         vad_enabled: default_vad_enabled(),
         overlay_style: default_overlay_style(),
+        review_before_paste: false,
     }
 }
 

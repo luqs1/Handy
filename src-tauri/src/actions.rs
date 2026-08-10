@@ -470,6 +470,10 @@ impl ShortcutAction for TranscribeAction {
         let start_time = Instant::now();
         debug!("TranscribeAction::start called for binding: {}", binding_id);
 
+        // A new dictation preempts any transcription still waiting in the
+        // review panel — its text stays in history but is never pasted.
+        crate::review::cancel_pending_review(app);
+
         // Load model in the background
         let tm = app.state::<Arc<TranscriptionManager>>();
         let rm = app.state::<Arc<AudioRecordingManager>>();
@@ -775,25 +779,68 @@ impl ShortcutAction for TranscribeAction {
                             }
 
                             // Save to history if WAV was saved
-                            if wav_saved {
-                                if let Err(err) = hm.save_entry(
+                            let history_entry_id = if wav_saved {
+                                match hm.save_entry(
                                     file_name,
                                     transcription,
                                     post_process,
                                     processed.post_processed_text.clone(),
                                     processed.post_process_prompt.clone(),
                                 ) {
-                                    error!("Failed to save history entry: {}", err);
+                                    Ok(entry) => Some(entry.id),
+                                    Err(err) => {
+                                        error!("Failed to save history entry: {}", err);
+                                        None
+                                    }
                                 }
-                            }
+                            } else {
+                                None
+                            };
 
                             if processed.final_text.is_empty() {
                                 utils::hide_recording_overlay(&ah);
                                 change_tray_icon(&ah, TrayIconState::Idle);
                             } else {
+                                let mut final_text = processed.final_text;
+
+                                if get_settings(&ah).review_before_paste {
+                                    // Recording work is done; drop the overlay
+                                    // while the review panel is up.
+                                    utils::hide_recording_overlay(&ah);
+                                    change_tray_icon(&ah, TrayIconState::Idle);
+
+                                    match crate::review::request_review(&ah, final_text.clone())
+                                        .await
+                                    {
+                                        crate::review::ReviewDecision::Paste(text) => {
+                                            if text != final_text {
+                                                if let Some(id) = history_entry_id {
+                                                    if let Err(e) =
+                                                        hm.set_edited_text(id, text.clone())
+                                                    {
+                                                        error!(
+                                                            "Failed to store edited text: {}",
+                                                            e
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                            final_text = text;
+                                        }
+                                        crate::review::ReviewDecision::Cancelled => {
+                                            debug!("Review cancelled; skipping paste");
+                                            return;
+                                        }
+                                    }
+
+                                    if final_text.trim().is_empty() {
+                                        debug!("Review left empty text; skipping paste");
+                                        return;
+                                    }
+                                }
+
                                 let ah_clone = ah.clone();
                                 let paste_time = Instant::now();
-                                let final_text = processed.final_text;
                                 let rm_for_paste = Arc::clone(&rm);
                                 ah.run_on_main_thread(move || {
                                     if rm_for_paste.was_cancelled_since(cancel_generation) {
