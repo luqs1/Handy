@@ -804,9 +804,8 @@ impl ShortcutAction for TranscribeAction {
                                 let mut final_text = processed.final_text;
 
                                 if get_settings(&ah).review_before_paste {
-                                    // Recording work is done; drop the overlay
-                                    // while the review panel is up.
-                                    utils::hide_recording_overlay(&ah);
+                                    // Recording is done but the overlay stays
+                                    // up — it morphs into the review editor.
                                     change_tray_icon(&ah, TrayIconState::Idle);
 
                                     match crate::review::request_review(&ah, final_text.clone())
@@ -829,12 +828,22 @@ impl ShortcutAction for TranscribeAction {
                                         }
                                         crate::review::ReviewDecision::Cancelled => {
                                             debug!("Review cancelled; skipping paste");
+                                            utils::hide_recording_overlay(&ah);
+                                            change_tray_icon(&ah, TrayIconState::Idle);
+                                            return;
+                                        }
+                                        crate::review::ReviewDecision::Preempted => {
+                                            // A newer dictation owns the overlay
+                                            // now — don't hide it from under it.
+                                            debug!("Review preempted; skipping paste");
                                             return;
                                         }
                                     }
 
                                     if final_text.trim().is_empty() {
                                         debug!("Review left empty text; skipping paste");
+                                        utils::hide_recording_overlay(&ah);
+                                        change_tray_icon(&ah, TrayIconState::Idle);
                                         return;
                                     }
                                 }

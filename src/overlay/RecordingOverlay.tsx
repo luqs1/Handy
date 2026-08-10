@@ -1,4 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "./RecordingOverlay.css";
@@ -12,7 +13,12 @@ import type {
 import i18n, { syncLanguageFromSettings } from "@/i18n";
 import { getLanguageDirection } from "@/lib/utils/rtl";
 
-type OverlayState = "recording" | "streaming" | "transcribing" | "processing";
+type OverlayState =
+  | "recording"
+  | "streaming"
+  | "transcribing"
+  | "processing"
+  | "review";
 
 // Number of reactive bars in the waveform (the simple, smoothed style shared by
 // every overlay form). Mic levels arrive as 16 FFT buckets; we take the first N.
@@ -39,6 +45,17 @@ const RecordingOverlay: React.FC = () => {
   // True once live text overflows the cap. A top overlay fades its top edge only
   // while overflowing, so the resting first line stays crisp flush under the pill.
   const [overflowing, setOverflowing] = useState(false);
+
+  // ---- Review-before-paste state ----
+  const [reviewText, setReviewText] = useState("");
+  const [reviewEdited, setReviewEdited] = useState(false);
+  const reviewRef = useRef<HTMLTextAreaElement>(null);
+  // A bare Option/Alt tap (press + release with no other key between) confirms
+  // as-is; Option used as a modifier (⌥→ word jumps, ⌥-letter characters)
+  // clears the flag on the second keydown so it never misfires while editing.
+  const altTapRef = useRef(false);
+  // Guards against double-submits (Alt-tap racing Enter).
+  const reviewDecidedRef = useRef(false);
 
   const smoothedLevelsRef = useRef<number[]>(Array(16).fill(0));
   // Live-text scroll-back: the text region "sticks" to the newest line while the
@@ -68,6 +85,22 @@ const RecordingOverlay: React.FC = () => {
         setState(overlayState);
         if (overlayState === "recording" || overlayState === "streaming") {
           setStreamText({ committed: "", tentative: "" });
+        }
+        if (overlayState === "review") {
+          reviewDecidedRef.current = false;
+          altTapRef.current = false;
+          setReviewEdited(false);
+          // Pull the pending text; the review-show event also pushes it, but
+          // the pull survives event/webview races. Both deliver the same
+          // value, so whichever lands last is harmless.
+          try {
+            const pending = await invoke<string | null>(
+              "get_pending_review_text",
+            );
+            if (pending != null) setReviewText(pending);
+          } catch {
+            // Keep whatever the review-show event delivered.
+          }
         }
         if (overlayState === "streaming") {
           setPhase("listening");
@@ -104,12 +137,20 @@ const RecordingOverlay: React.FC = () => {
         if (payload.kind) setWorkKind(payload.kind);
       });
 
+      const unlistenReview = await listen<{ text: string }>(
+        "review-show",
+        (event) => {
+          setReviewText(event.payload.text);
+        },
+      );
+
       return () => {
         unlistenShow();
         unlistenHide();
         unlistenLevel();
         unlistenStream();
         unlistenPhase();
+        unlistenReview();
       };
     };
 
@@ -138,6 +179,20 @@ const RecordingOverlay: React.FC = () => {
     pinnedRef.current = true;
     setOverflowing(false);
   }, [session]);
+
+  // Focus the review textarea once it's on screen and whenever review text
+  // lands. Skipped while it's already focused so it never yanks the caret to
+  // the end mid-edit.
+  useEffect(() => {
+    if (state !== "review" || !isVisible) return;
+    requestAnimationFrame(() => {
+      const el = reviewRef.current;
+      if (el && document.activeElement !== el) {
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      }
+    });
+  }, [state, isVisible, reviewText]);
 
   if (!isVisible) return null;
 
@@ -208,6 +263,82 @@ const RecordingOverlay: React.FC = () => {
       <div className="sbase-r">{showCancel && cancelBtn}</div>
     </div>
   );
+
+  // ---- Review-before-paste: the overlay becomes an editable card ----
+  if (state === "review") {
+    const submitReview = (value: string) => {
+      if (reviewDecidedRef.current) return;
+      reviewDecidedRef.current = true;
+      invoke("review_submit", { text: value }).catch(() => {
+        reviewDecidedRef.current = false;
+      });
+    };
+    const cancelReview = () => {
+      if (reviewDecidedRef.current) return;
+      reviewDecidedRef.current = true;
+      invoke("review_cancel").catch(() => {
+        reviewDecidedRef.current = false;
+      });
+    };
+    const onReviewKeyDown = (
+      event: React.KeyboardEvent<HTMLTextAreaElement>,
+    ) => {
+      if (event.key === "Alt") {
+        altTapRef.current = true;
+        return;
+      }
+      altTapRef.current = false;
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        submitReview(event.currentTarget.value);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        cancelReview();
+      }
+    };
+    const onReviewKeyUp = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === "Alt" && altTapRef.current) {
+        altTapRef.current = false;
+        submitReview(event.currentTarget.value);
+      }
+    };
+
+    return (
+      <div dir={direction} className={`ov-stage ${position}`}>
+        <div className="rvcard">
+          <div className="rvhead">
+            <span className="rvtitle">{t("review.title")}</span>
+            {reviewEdited && (
+              <span className="rvedited">{t("review.edited")}</span>
+            )}
+          </div>
+          <textarea
+            ref={reviewRef}
+            className="rvtext"
+            value={reviewText}
+            spellCheck={false}
+            onChange={(event) => {
+              setReviewText(event.target.value);
+              setReviewEdited(true);
+            }}
+            onKeyDown={onReviewKeyDown}
+            onKeyUp={onReviewKeyUp}
+          />
+          <div className="rvhints">
+            <span>
+              <kbd>{t("review.keyEnter")}</kbd> {t("review.hintPaste")}
+            </span>
+            <span>
+              <kbd>{t("review.keyOption")}</kbd> {t("review.hintAsIs")}
+            </span>
+            <span>
+              <kbd>{t("review.keyEscape")}</kbd> {t("review.hintDismiss")}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ---- Live overlay: a pill that sculpts open into a panel ----
   if (state === "streaming") {

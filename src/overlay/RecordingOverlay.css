@@ -410,3 +410,70 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ---- Review-before-paste card ------------------------------------------- */
+/* Same surface/token vocabulary as the pill & Live panel, sized to fill the
+   review overlay window (560x210) minus breathing room. */
+.rvcard {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 536px;
+  height: 186px;
+  margin: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--s-border);
+  background: var(--s-surface);
+  font-family: var(--s-font);
+  color: var(--color-text);
+}
+
+.rvhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.rvtitle {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--s-muted);
+}
+
+.rvedited {
+  font-size: 11px;
+  color: var(--s-accent);
+}
+
+.rvtext {
+  flex: 1;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--s-font);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-text);
+  caret-color: var(--s-accent);
+}
+
+.rvhints {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--s-muted);
+}
+
+.rvhints kbd {
+  font-family: var(--s-font);
+  font-size: 10px;
+  padding: 1px 4px;
+  border: 1px solid var(--s-border);
+  border-radius: 4px;
+  background: transparent;
+}

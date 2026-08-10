@@ -336,9 +336,6 @@ fn initialize_core_logic(app_handle: &AppHandle) {
 
     // Create the recording overlay window (hidden by default)
     utils::create_recording_overlay(app_handle);
-
-    // Create the review-before-paste panel (hidden by default, macOS only)
-    review::create_review_panel(app_handle);
 }
 
 #[tauri::command]
@@ -651,6 +648,7 @@ pub fn run(cli_args: CliArgs) {
             shortcut::change_review_before_paste_setting,
             review::review_submit,
             review::review_cancel,
+            review::get_pending_review_text,
             shortcut::change_lazy_stream_close_setting,
             shortcut::change_vad_enabled_setting,
             shortcut::change_filler_word_removal_enabled_setting,

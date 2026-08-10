@@ -27,7 +27,10 @@ use std::env;
 tauri_panel! {
     panel!(RecordingOverlayPanel {
         config: {
-            can_become_key_window: false,
+            // Key-able so the review state can accept typing (Spotlight-style:
+            // key window without activating the app). Normal overlay states
+            // never call make_key_window, so recording behavior is unchanged.
+            can_become_key_window: true,
             is_floating_panel: true
         }
     })
@@ -50,10 +53,16 @@ const OVERLAY_HEIGHT: f64 = 46.0;
 const OVERLAY_STREAM_WIDTH: f64 = 400.0;
 const OVERLAY_STREAM_HEIGHT: f64 = 120.0;
 
+// Review state: room for a few lines of editable transcript plus the hint row.
+const OVERLAY_REVIEW_WIDTH: f64 = 560.0;
+const OVERLAY_REVIEW_HEIGHT: f64 = 210.0;
+
 /// Overlay window size (logical) for a given UI state.
 fn overlay_dimensions(state: &str) -> (f64, f64) {
     if state == "streaming" {
         (OVERLAY_STREAM_WIDTH, OVERLAY_STREAM_HEIGHT)
+    } else if state == "review" {
+        (OVERLAY_REVIEW_WIDTH, OVERLAY_REVIEW_HEIGHT)
     } else {
         (OVERLAY_WIDTH, OVERLAY_HEIGHT)
     }
@@ -600,6 +609,41 @@ pub fn show_transcribing_overlay(app_handle: &AppHandle) {
 /// Shows the processing overlay window
 pub fn show_processing_overlay(app_handle: &AppHandle) {
     show_overlay_state(app_handle, "processing");
+}
+
+/// Shows the overlay in the editable review state and makes it the key window
+/// so it accepts typing (macOS). Bypasses the OverlayStyle::None check —
+/// review-before-paste is an explicit opt-in and must be visible to work.
+pub fn show_review_overlay(app_handle: &AppHandle) {
+    let handle = app_handle.clone();
+    let _ = app_handle.run_on_main_thread(move || {
+        show_overlay_state_on_main(&handle, "review");
+        #[cfg(target_os = "macos")]
+        {
+            use tauri_nspanel::ManagerExt;
+            match handle.get_webview_panel("recording_overlay") {
+                Ok(panel) => panel.make_key_window(),
+                Err(e) => log::error!("Review: overlay panel missing: {:?}", e),
+            }
+        }
+    });
+}
+
+/// Returns key status to the previously active application, so a synthetic
+/// Cmd+V lands in the user's text field rather than the overlay.
+pub fn resign_review_key(app_handle: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    {
+        let handle = app_handle.clone();
+        let _ = app_handle.run_on_main_thread(move || {
+            use tauri_nspanel::ManagerExt;
+            if let Ok(panel) = handle.get_webview_panel("recording_overlay") {
+                panel.resign_key_window();
+            }
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app_handle;
 }
 
 /// Updates the overlay window position based on current settings
